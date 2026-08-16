@@ -1,0 +1,34 @@
+<library path="autoware_pose_twist_fusion_plugins">
+  <class name="autoware::pose_twist_fusion::PassthroughFusionPlugin"
+         type="autoware::pose_twist_fusion::PassthroughFusionPlugin"
+         base_class_type="autoware::pose_twist_fusion::FusionPlugin">
+    <description>
+      Wiring-verification plugin: republishes the pose_estimator input as the internal estimate.
+    </description>
+  </class>
+
+  <class name="autoware::pose_twist_fusion::EkfFusionPlugin"
+         type="autoware::pose_twist_fusion::EkfFusionPlugin"
+         base_class_type="autoware::pose_twist_fusion::FusionPlugin">
+    <description>
+      Autoware 2D EKF (autoware_ekf_localizer ekf_module, vendored).
+    </description>
+  </class>
+
+  <class name="autoware::pose_twist_fusion::LioSamImuPreintegrationPlugin"
+         type="autoware::pose_twist_fusion::LioSamImuPreintegrationPlugin"
+         base_class_type="autoware::pose_twist_fusion::FusionPlugin">
+    <description>
+      LIO-SAM imuPreintegration (IMU preintegration + iSAM2 graph, BSD-3-Clause).
+    </description>
+  </class>
+
+  <class name="autoware::pose_twist_fusion::FactorGraphFusionPlugin"
+         type="autoware::pose_twist_fusion::FactorGraphFusionPlugin"
+         base_class_type="autoware::pose_twist_fusion::FusionPlugin">
+    <description>
+      Two-stage GTSAM factor graph fusion (Graph1: analytic propagation at 20 ms,
+      Graph2: fixed-lag windowed batch optimization at 500 ms).
+    </description>
+  </class>
+</library>

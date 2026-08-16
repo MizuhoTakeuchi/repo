@@ -1,0 +1,242 @@
+/**:
+  ros__parameters:
+    # ekf | lio_sam_imu_preintegration | factor_graph_fusion  (read_only: switching requires a restart)
+    fusion_method: factor_graph_fusion
+    output_rate_hz: 50.0
+    tf_rate_hz: 50.0
+    enable_tf: true
+    pose_frame_id: map
+    base_frame_id: base_link
+    imu_topic: /sensing/imu/imu_data
+    initialpose_topic: initialpose
+
+    output:
+      flatten_to_2d: false          # ekf mode always behaves as true (design §3.3)
+      max_extrapolation_ms: 100
+      twist_smoothing_consistency: true
+      exact_smoothing_adjoint: false
+      undetermined_variance: 1.0e4
+
+    covariance:
+      use_exact_jacobian: false
+
+    qos:
+      imu_depth: 100
+      twist_depth: 100
+      pose_depth: 10
+      output_depth: 1
+
+    # --- factor_graph_fusion ------------------------------------------------
+    factor_graph_fusion:
+      graph1_node_interval_ms: 20
+      graph2_max_node_interval_ms: 100
+      graph2_optimize_interval_ms: 500
+      graph2_lag_ms: 1000
+      node_merge_tolerance_ms: 5
+      graph2_max_nodes: 80
+
+      graph2:
+        optimizer: levenberg_marquardt   # levenberg_marquardt | isam2
+        marginalization: linear_container  # linear_container | prior_triple
+        lag_margin_ms: 100
+        measurement_history_max: 512
+        boundary_merge_velocity_mps: 20.0
+        boundary_merge_yaw_rate_rps: 1.0
+
+      buffer:
+        imu_buffer_ms: 3500
+        vehicle_twist_buffer_ms: 3500
+
+      timing:
+        history_length_ms: 1500
+        max_measurement_delay_ms: 300
+        future_tolerance_ms: 20
+        exact_interpolation: false
+
+      reset:
+        carry_cross_covariance: true
+        cross_covariance_inflation: 3.0
+        max_anchor_jump_m: 0.03        # must stay < 0.05 (§6.2 start-up check)
+        max_anchor_jump_rad: 0.003     # must stay < 0.005
+        smoothing_max_lin_rate_mps: 1.0
+        smoothing_max_ang_rate_rps: 0.2
+        smoothing_max_duration_ms: 1000
+        smoothing_done_m: 0.005
+        smoothing_done_rad: 0.0005
+        smoothing_relatch_ratio: 2.0
+
+      covariance_correction:
+        enable_gate: true              # layer A
+        enable_weighting: true         # layer B
+        weight_function: exp_excess_nis  # exp_excess_nis | inverse_nis | inverse_linear
+        w_min: 0.05
+        gate_chi2:
+          dim1: 10.83                  # wheel speed (layer A only, inside Graph1)
+          dim3: 16.27                  # GNSS position
+          dim6: 22.46                  # NDT / SLAM
+        low_speed_relax_mps: 0.5
+        low_speed_min_pos_stddev: 0.10
+        low_speed_min_rot_stddev: 0.01
+        recovery_gate_scale: 10.0
+
+      robust_kernel: none              # layer C: none | huber | cauchy | dcs | gm
+      robust_kernel_param: 1.345
+
+      imu:
+        frame_id: imu_link
+        use_tf_extrinsic: true
+        extrinsic_fallback:
+          x: 0.0
+          y: 0.0
+          z: 0.0
+          roll: 0.0
+          pitch: 0.0
+          yaw: 0.0
+        lever_arm_compensation: centrifugal   # rotation_only | centrifugal | full
+        euler_term_sigma: 0.02
+        factor_type: imu_factor
+        gravity: 9.80665
+        use_orientation: false
+        accel_noise_stddev: 0.0039
+        gyro_noise_stddev: 0.0015
+        accel_bias_rw_stddev: 0.00064
+        gyro_bias_rw_stddev: 0.000035
+        integration_cov: 1.0e-8
+        initial_bias:
+          ax: 0.0
+          ay: 0.0
+          az: 0.0
+          gx: 0.0
+          gy: 0.0
+          gz: 0.0
+
+      wheel_speed:
+        use: true
+        topic: /sensing/vehicle_velocity_converter/twist_with_covariance
+        fallback_stddev: 0.2
+        timeout_ms: 200
+        graph2_binding: nearest        # nearest | interpolate | none
+        graph2_max_time_offset_ms: 30
+        graph2_time_offset_accel: 3.0
+        use_nonholonomic: true
+        nonholonomic_lat_stddev: 0.1
+        nonholonomic_vert_stddev: 0.05
+        nonholonomic_min_speed_mps: 0.5
+
+      gnss:
+        use: true
+        topic: /sensing/gnss/pose_with_covariance
+        frame_id: gnss_link
+        use_tf_extrinsic: true
+        lever_arm_fallback:
+          x: 0.0
+          y: 0.0
+          z: 0.0
+        fallback_stddev:
+          x: 1.0
+          y: 1.0
+          z: 3.0
+        timeout_ms: 2000
+
+      ndt:
+        use: true
+        topic: /localization/pose_estimator/pose_with_covariance
+        fallback_stddev:
+          pos: 0.2
+          rot: 0.02
+        timeout_ms: 1000
+
+      slam:                            # extension beyond the requirement: set use=false
+        use: false                     # for the required input configuration (RC-3)
+        topic: lio_sam/mapping/odometry
+        use_as: relative               # relative | absolute
+        frame_id: map
+        covariance_is_relative: false
+        relative_covariance_scale: 1.0
+        max_speed_mps: 20.0
+        max_yaw_rate_rps: 1.0
+        jump_margin_m: 0.30
+        jump_margin_rad: 0.05
+        interp_sigma_per_s:
+          pos: 0.05
+          rot: 0.01
+        covariance_scale: 3.0
+        timeout_ms: 1000
+
+      initialization:
+        pose_source: initialpose       # initialpose | ndt | gnss
+        gnss_yaw_source: auto          # auto | dual_antenna | course | initialpose
+                                       #  | zero_with_large_covariance (test only)
+        gnss_yaw_max_stddev_rad: 0.2
+        gnss_yaw_min_speed_mps: 2.0
+        gnss_yaw_min_duration_s: 1.0
+        gnss_yaw_timeout_s: 30.0
+        gnss_yaw_fallback_stddev_rad: 1.0
+        pose_cov_scale: 4.0
+        init_pose_stddev:
+          pos: 1.0
+          rot: 0.1
+        init_vel_stddev: 0.5
+        init_accel_bias_stddev: 0.1
+        init_gyro_bias_stddev: 0.01
+        required_imu_samples: 20
+        bias_init_static_s: 1.0
+        bias_init_timeout_s: 2.0
+
+      failure:
+        max_velocity_mps: 40.0
+        max_accel_bias: 1.0
+        max_gyro_bias: 0.5
+        optimizer_failure_limit: 3
+        optimizer_failure_reinit_limit: 10
+        failure_cov_inflation: 10.0
+        imu_timeout_ms: 100
+        long_dropout_s: 5.0
+
+    # --- lio_sam_imu_preintegration -----------------------------------------
+    lio_sam:
+      imu_topic: /sensing/imu/imu_data
+      lidar_odometry_topic: lio_sam/mapping/odometry
+      covariance_source: propagated    # propagated (joint 15x15) | fixed
+      fallback_pose_stddev:
+        pos: 0.3
+        rot: 0.03
+      fallback_twist_stddev:
+        lin: 0.3
+        ang: 0.03
+      imu_acc_noise: 0.0039939570888238808
+      imu_gyr_noise: 0.0015636343949698187
+      imu_acc_bias_n: 6.4356659353532566e-05
+      imu_gyr_bias_n: 3.5640318696367613e-05
+      imu_gravity: 9.80511
+      reset_key_count: 100
+      failure_velocity_mps: 30.0
+      failure_bias: 1.0
+      extrinsic_imu_to_base:
+        x: 0.0
+        y: 0.0
+        z: 0.0
+        roll: 0.0
+        pitch: 0.0
+        yaw: 0.0
+
+    # --- ekf ----------------------------------------------------------------
+    ekf:
+      input_twist_topic: /localization/twist_estimator/twist_with_covariance
+      input_pose_topic: /localization/pose_estimator/pose_with_covariance
+      enable_yaw_bias_estimation: true
+      extend_state_step: 50
+      predict_frequency: 50.0
+      pose_additional_delay: 0.0
+      pose_gate_dist: 10.0
+      pose_smoothing_steps: 5.0
+      twist_additional_delay: 0.0
+      twist_gate_dist: 10.0
+      twist_smoothing_steps: 2.0
+      proc_stddev_yaw_c: 0.005
+      proc_stddev_vx_c: 10.0
+      proc_stddev_wz_c: 5.0
+      z_filter_proc_dev: 1.0
+      roll_filter_proc_dev: 0.01
+      pitch_filter_proc_dev: 0.01
+      threshold_observable_velocity_mps: 0.5

@@ -1,0 +1,410 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parameters for autoware_pose_twist_fusion",
+  "type": "object",
+  "definitions": {
+    "pose_twist_fusion": {
+      "type": "object",
+      "properties": {
+        "fusion_method": {
+          "type": "string",
+          "enum": ["ekf", "lio_sam_imu_preintegration", "factor_graph_fusion", "passthrough"],
+          "default": "factor_graph_fusion",
+          "description": "Estimation algorithm. Read-only: switching requires a node restart (D17)."
+        },
+        "output_rate_hz": {
+          "type": "number",
+          "default": 50.0,
+          "exclusiveMinimum": 0.0,
+          "description": "Publish rate of every output topic. 1000/output_rate_hz must be >= graph1_node_interval_ms."
+        },
+        "tf_rate_hz": { "type": "number", "default": 50.0, "exclusiveMinimum": 0.0 },
+        "enable_tf": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish map -> base_link. Only one node in the system may do so (design §7)."
+        },
+        "pose_frame_id": { "type": "string", "default": "map" },
+        "base_frame_id": { "type": "string", "default": "base_link" },
+        "imu_topic": { "type": "string", "default": "/sensing/imu/imu_data" },
+        "initialpose_topic": { "type": "string", "default": "initialpose" },
+        "output": {
+          "type": "object",
+          "properties": {
+            "flatten_to_2d": {
+              "type": "boolean",
+              "default": false,
+              "description": "Replace z/roll/pitch by the Simple1DFilter output and zero the extra twist components. Always true in ekf mode (D20)."
+            },
+            "max_extrapolation_ms": { "type": "integer", "default": 100, "minimum": 0 },
+            "twist_smoothing_consistency": {
+              "type": "boolean",
+              "default": true,
+              "description": "Keep d(pose_published)/dt == twist_published while smoothing (D31)."
+            },
+            "exact_smoothing_adjoint": {
+              "type": "boolean",
+              "default": false,
+              "description": "Use xi_pub = Ad_{C^-1} xi_int + u instead of the first order form (mean value only)."
+            },
+            "undetermined_variance": { "type": "number", "default": 10000.0, "exclusiveMinimum": 0.0 }
+          },
+          "additionalProperties": false
+        },
+        "covariance": {
+          "type": "object",
+          "properties": {
+            "use_exact_jacobian": { "type": "boolean", "default": false }
+          },
+          "additionalProperties": false
+        },
+        "qos": {
+          "type": "object",
+          "properties": {
+            "imu_depth": { "type": "integer", "default": 100, "minimum": 1 },
+            "twist_depth": { "type": "integer", "default": 100, "minimum": 1 },
+            "pose_depth": { "type": "integer", "default": 10, "minimum": 1 },
+            "output_depth": { "type": "integer", "default": 1, "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "factor_graph_fusion": {
+          "type": "object",
+          "properties": {
+            "graph1_node_interval_ms": { "type": "integer", "default": 20, "minimum": 1 },
+            "graph2_max_node_interval_ms": { "type": "integer", "default": 100, "minimum": 1 },
+            "graph2_optimize_interval_ms": { "type": "integer", "default": 500, "minimum": 1 },
+            "graph2_lag_ms": {
+              "type": "integer",
+              "default": 1000,
+              "description": "Fixed lag window length. Must be >= optimize_interval + max_measurement_delay + lag_margin (§6.2)."
+            },
+            "node_merge_tolerance_ms": { "type": "integer", "default": 5, "minimum": 1 },
+            "graph2_max_nodes": { "type": "integer", "default": 80, "minimum": 3 },
+            "graph2": {
+              "type": "object",
+              "properties": {
+                "optimizer": {
+                  "type": "string",
+                  "enum": ["levenberg_marquardt", "isam2"],
+                  "default": "levenberg_marquardt"
+                },
+                "marginalization": {
+                  "type": "string",
+                  "enum": ["linear_container", "prior_triple"],
+                  "default": "linear_container",
+                  "description": "linear_container keeps the cross correlations; prior_triple drops them and is not conservative (D33)."
+                },
+                "lag_margin_ms": { "type": "integer", "default": 100, "minimum": 0 },
+                "measurement_history_max": { "type": "integer", "default": 512, "minimum": 1 },
+                "boundary_merge_velocity_mps": { "type": "number", "default": 20.0, "exclusiveMinimum": 0.0 },
+                "boundary_merge_yaw_rate_rps": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 }
+              },
+              "additionalProperties": false
+            },
+            "buffer": {
+              "type": "object",
+              "properties": {
+                "imu_buffer_ms": { "type": "integer", "default": 3500 },
+                "vehicle_twist_buffer_ms": { "type": "integer", "default": 3500 }
+              },
+              "additionalProperties": false
+            },
+            "timing": {
+              "type": "object",
+              "properties": {
+                "history_length_ms": { "type": "integer", "default": 1500 },
+                "max_measurement_delay_ms": { "type": "integer", "default": 300 },
+                "future_tolerance_ms": { "type": "integer", "default": 20 },
+                "exact_interpolation": { "type": "boolean", "default": false }
+              },
+              "additionalProperties": false
+            },
+            "reset": {
+              "type": "object",
+              "properties": {
+                "carry_cross_covariance": { "type": "boolean", "default": true },
+                "cross_covariance_inflation": { "type": "number", "default": 3.0, "minimum": 1.0 },
+                "max_anchor_jump_m": {
+                  "type": "number",
+                  "default": 0.03,
+                  "exclusiveMinimum": 0.0,
+                  "exclusiveMaximum": 0.05,
+                  "description": "Below this the anchor jump is applied immediately. Must stay strictly below the test 3 criterion (D45)."
+                },
+                "max_anchor_jump_rad": {
+                  "type": "number",
+                  "default": 0.003,
+                  "exclusiveMinimum": 0.0,
+                  "exclusiveMaximum": 0.005
+                },
+                "smoothing_max_lin_rate_mps": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "smoothing_max_ang_rate_rps": { "type": "number", "default": 0.2, "exclusiveMinimum": 0.0 },
+                "smoothing_max_duration_ms": { "type": "integer", "default": 1000, "minimum": 1 },
+                "smoothing_done_m": { "type": "number", "default": 0.005, "exclusiveMinimum": 0.0 },
+                "smoothing_done_rad": { "type": "number", "default": 0.0005, "exclusiveMinimum": 0.0 },
+                "smoothing_relatch_ratio": { "type": "number", "default": 2.0, "exclusiveMinimum": 1.0 }
+              },
+              "additionalProperties": false
+            },
+            "covariance_correction": {
+              "type": "object",
+              "properties": {
+                "enable_gate": { "type": "boolean", "default": true },
+                "enable_weighting": { "type": "boolean", "default": true },
+                "weight_function": {
+                  "type": "string",
+                  "enum": ["exp_excess_nis", "inverse_nis", "inverse_linear"],
+                  "default": "exp_excess_nis",
+                  "description": "Heuristic confidence weight of layer B (D22)."
+                },
+                "w_min": { "type": "number", "default": 0.05, "exclusiveMinimum": 0.0, "maximum": 1.0 },
+                "gate_chi2": {
+                  "type": "object",
+                  "properties": {
+                    "dim1": { "type": "number", "default": 10.83, "exclusiveMinimum": 0.0 },
+                    "dim3": { "type": "number", "default": 16.27, "exclusiveMinimum": 0.0 },
+                    "dim6": { "type": "number", "default": 22.46, "exclusiveMinimum": 0.0 }
+                  },
+                  "additionalProperties": false
+                },
+                "low_speed_relax_mps": { "type": "number", "default": 0.5, "minimum": 0.0 },
+                "low_speed_min_pos_stddev": { "type": "number", "default": 0.1, "exclusiveMinimum": 0.0 },
+                "low_speed_min_rot_stddev": { "type": "number", "default": 0.01, "exclusiveMinimum": 0.0 },
+                "recovery_gate_scale": { "type": "number", "default": 10.0, "exclusiveMinimum": 0.0 }
+              },
+              "additionalProperties": false
+            },
+            "robust_kernel": {
+              "type": "string",
+              "enum": ["none", "huber", "cauchy", "dcs", "gm"],
+              "default": "none"
+            },
+            "robust_kernel_param": { "type": "number", "default": 1.345 },
+            "imu": {
+              "type": "object",
+              "properties": {
+                "frame_id": { "type": "string", "default": "imu_link" },
+                "use_tf_extrinsic": { "type": "boolean", "default": true },
+                "extrinsic_fallback": { "type": "object" },
+                "lever_arm_compensation": {
+                  "type": "string",
+                  "enum": ["rotation_only", "centrifugal", "full"],
+                  "default": "centrifugal"
+                },
+                "euler_term_sigma": { "type": "number", "default": 0.02, "exclusiveMinimum": 0.0 },
+                "factor_type": {
+                  "type": "string",
+                  "enum": ["imu_factor", "combined_imu_factor"],
+                  "default": "imu_factor"
+                },
+                "gravity": { "type": "number", "default": 9.80665, "exclusiveMinimum": 0.0 },
+                "use_orientation": { "type": "boolean", "default": false },
+                "accel_noise_stddev": { "type": "number", "default": 0.0039, "exclusiveMinimum": 0.0 },
+                "gyro_noise_stddev": { "type": "number", "default": 0.0015, "exclusiveMinimum": 0.0 },
+                "accel_bias_rw_stddev": { "type": "number", "default": 0.00064, "exclusiveMinimum": 0.0 },
+                "gyro_bias_rw_stddev": { "type": "number", "default": 0.000035, "exclusiveMinimum": 0.0 },
+                "integration_cov": { "type": "number", "default": 1e-8, "exclusiveMinimum": 0.0 },
+                "initial_bias": { "type": "object" }
+              },
+              "additionalProperties": false
+            },
+            "wheel_speed": {
+              "type": "object",
+              "properties": {
+                "use": { "type": "boolean", "default": true },
+                "topic": {
+                  "type": "string",
+                  "default": "/sensing/vehicle_velocity_converter/twist_with_covariance",
+                  "description": "Raw wheel speed, not the gyro_odometer output, to avoid counting the IMU twice (D19)."
+                },
+                "fallback_stddev": { "type": "number", "default": 0.2, "exclusiveMinimum": 0.0 },
+                "timeout_ms": { "type": "integer", "default": 200, "minimum": 21 },
+                "graph2_binding": {
+                  "type": "string",
+                  "enum": ["nearest", "interpolate", "none"],
+                  "default": "nearest"
+                },
+                "graph2_max_time_offset_ms": { "type": "integer", "default": 30 },
+                "graph2_time_offset_accel": { "type": "number", "default": 3.0, "exclusiveMinimum": 0.0 },
+                "use_nonholonomic": { "type": "boolean", "default": true },
+                "nonholonomic_lat_stddev": { "type": "number", "default": 0.1, "exclusiveMinimum": 0.0 },
+                "nonholonomic_vert_stddev": { "type": "number", "default": 0.05, "exclusiveMinimum": 0.0 },
+                "nonholonomic_min_speed_mps": { "type": "number", "default": 0.5, "minimum": 0.0 }
+              },
+              "additionalProperties": false
+            },
+            "gnss": {
+              "type": "object",
+              "properties": {
+                "use": { "type": "boolean", "default": true },
+                "topic": { "type": "string", "default": "/sensing/gnss/pose_with_covariance" },
+                "frame_id": { "type": "string", "default": "gnss_link" },
+                "use_tf_extrinsic": { "type": "boolean", "default": true },
+                "lever_arm_fallback": { "type": "object" },
+                "fallback_stddev": { "type": "object" },
+                "timeout_ms": { "type": "integer", "default": 2000, "minimum": 1 }
+              },
+              "additionalProperties": false
+            },
+            "ndt": {
+              "type": "object",
+              "properties": {
+                "use": { "type": "boolean", "default": true },
+                "topic": {
+                  "type": "string",
+                  "default": "/localization/pose_estimator/pose_with_covariance"
+                },
+                "fallback_stddev": { "type": "object" },
+                "timeout_ms": { "type": "integer", "default": 1000, "minimum": 1 }
+              },
+              "additionalProperties": false
+            },
+            "slam": {
+              "type": "object",
+              "properties": {
+                "use": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Extension beyond the requirement; false reproduces the required input set (RC-3)."
+                },
+                "topic": { "type": "string", "default": "lio_sam/mapping/odometry" },
+                "use_as": { "type": "string", "enum": ["relative", "absolute"], "default": "relative" },
+                "frame_id": { "type": "string", "default": "map" },
+                "covariance_is_relative": { "type": "boolean", "default": false },
+                "relative_covariance_scale": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "max_speed_mps": { "type": "number", "default": 20.0, "exclusiveMinimum": 0.0 },
+                "max_yaw_rate_rps": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "jump_margin_m": { "type": "number", "default": 0.3, "exclusiveMinimum": 0.0 },
+                "jump_margin_rad": { "type": "number", "default": 0.05, "exclusiveMinimum": 0.0 },
+                "interp_sigma_per_s": { "type": "object" },
+                "covariance_scale": { "type": "number", "default": 3.0, "exclusiveMinimum": 0.0 },
+                "timeout_ms": { "type": "integer", "default": 1000, "minimum": 1 }
+              },
+              "additionalProperties": false
+            },
+            "initialization": {
+              "type": "object",
+              "properties": {
+                "pose_source": {
+                  "type": "string",
+                  "enum": ["initialpose", "ndt", "gnss"],
+                  "default": "initialpose"
+                },
+                "gnss_yaw_source": {
+                  "type": "string",
+                  "enum": ["auto", "dual_antenna", "course", "initialpose", "zero_with_large_covariance"],
+                  "default": "auto",
+                  "description": "zero_with_large_covariance is a test-only setting and raises a start-up WARN (D41)."
+                },
+                "gnss_yaw_max_stddev_rad": { "type": "number", "default": 0.2, "exclusiveMinimum": 0.0 },
+                "gnss_yaw_min_speed_mps": { "type": "number", "default": 2.0, "exclusiveMinimum": 0.0 },
+                "gnss_yaw_min_duration_s": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "gnss_yaw_timeout_s": { "type": "number", "default": 30.0, "exclusiveMinimum": 0.0 },
+                "gnss_yaw_fallback_stddev_rad": {
+                  "type": "number",
+                  "default": 1.0,
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1.5
+                },
+                "pose_cov_scale": { "type": "number", "default": 4.0, "exclusiveMinimum": 0.0 },
+                "init_pose_stddev": { "type": "object" },
+                "init_vel_stddev": { "type": "number", "default": 0.5, "exclusiveMinimum": 0.0 },
+                "init_accel_bias_stddev": { "type": "number", "default": 0.1, "exclusiveMinimum": 0.0 },
+                "init_gyro_bias_stddev": { "type": "number", "default": 0.01, "exclusiveMinimum": 0.0 },
+                "required_imu_samples": { "type": "integer", "default": 20, "minimum": 1 },
+                "bias_init_static_s": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "bias_init_timeout_s": { "type": "number", "default": 2.0, "exclusiveMinimum": 0.0 }
+              },
+              "additionalProperties": false
+            },
+            "failure": {
+              "type": "object",
+              "properties": {
+                "max_velocity_mps": { "type": "number", "default": 40.0, "exclusiveMinimum": 0.0 },
+                "max_accel_bias": { "type": "number", "default": 1.0, "exclusiveMinimum": 0.0 },
+                "max_gyro_bias": { "type": "number", "default": 0.5, "exclusiveMinimum": 0.0 },
+                "optimizer_failure_limit": { "type": "integer", "default": 3, "minimum": 1 },
+                "optimizer_failure_reinit_limit": { "type": "integer", "default": 10, "minimum": 1 },
+                "failure_cov_inflation": { "type": "number", "default": 10.0, "minimum": 1.0 },
+                "imu_timeout_ms": { "type": "integer", "default": 100, "minimum": 1 },
+                "long_dropout_s": { "type": "number", "default": 5.0, "exclusiveMinimum": 0.0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "lio_sam": {
+          "type": "object",
+          "properties": {
+            "imu_topic": { "type": "string", "default": "/sensing/imu/imu_data" },
+            "lidar_odometry_topic": { "type": "string", "default": "lio_sam/mapping/odometry" },
+            "covariance_source": {
+              "type": "string",
+              "enum": ["propagated", "fixed"],
+              "default": "propagated",
+              "description": "propagated uses the joint 15x15 forward propagation (D39); fixed is a debug escape hatch."
+            },
+            "fallback_pose_stddev": { "type": "object" },
+            "fallback_twist_stddev": { "type": "object" },
+            "imu_acc_noise": { "type": "number" },
+            "imu_gyr_noise": { "type": "number" },
+            "imu_acc_bias_n": { "type": "number" },
+            "imu_gyr_bias_n": { "type": "number" },
+            "imu_gravity": { "type": "number", "default": 9.80511 },
+            "reset_key_count": { "type": "integer", "default": 100, "minimum": 2 },
+            "failure_velocity_mps": { "type": "number", "default": 30.0 },
+            "failure_bias": { "type": "number", "default": 1.0 },
+            "extrinsic_imu_to_base": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "ekf": {
+          "type": "object",
+          "properties": {
+            "input_twist_topic": {
+              "type": "string",
+              "default": "/localization/twist_estimator/twist_with_covariance"
+            },
+            "input_pose_topic": {
+              "type": "string",
+              "default": "/localization/pose_estimator/pose_with_covariance"
+            },
+            "enable_yaw_bias_estimation": { "type": "boolean", "default": true },
+            "extend_state_step": { "type": "integer", "default": 50, "minimum": 1 },
+            "predict_frequency": { "type": "number", "default": 50.0, "exclusiveMinimum": 0.0 },
+            "pose_additional_delay": { "type": "number", "default": 0.0 },
+            "pose_gate_dist": { "type": "number", "default": 10.0 },
+            "pose_smoothing_steps": { "type": "number", "default": 5.0 },
+            "twist_additional_delay": { "type": "number", "default": 0.0 },
+            "twist_gate_dist": { "type": "number", "default": 10.0 },
+            "twist_smoothing_steps": { "type": "number", "default": 2.0 },
+            "proc_stddev_yaw_c": { "type": "number", "default": 0.005 },
+            "proc_stddev_vx_c": { "type": "number", "default": 10.0 },
+            "proc_stddev_wz_c": { "type": "number", "default": 5.0 },
+            "z_filter_proc_dev": { "type": "number", "default": 1.0 },
+            "roll_filter_proc_dev": { "type": "number", "default": 0.01 },
+            "pitch_filter_proc_dev": { "type": "number", "default": 0.01 },
+            "threshold_observable_velocity_mps": { "type": "number", "default": 0.5 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["fusion_method", "output_rate_hz", "output", "factor_graph_fusion"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "/**": {
+      "type": "object",
+      "properties": {
+        "ros__parameters": { "$ref": "#/definitions/pose_twist_fusion" }
+      },
+      "required": ["ros__parameters"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["/**"],
+  "additionalProperties": false
+}

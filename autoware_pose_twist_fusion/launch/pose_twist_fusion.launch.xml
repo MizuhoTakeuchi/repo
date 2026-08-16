@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<!--
+  Drop-in replacement for ekf_localizer.launch.xml.
+
+  The remap names follow pose_twist_fusion_filter.launch.xml exactly, including the
+  absolute name of `pose_with_covariance` (design §2.1): RViz and several downstream
+  nodes reference /localization/pose_with_covariance, which lives *outside* the
+  pose_twist_fusion_filter namespace.
+
+  TF authority (design §7): map -> base_link must be published by this node only.
+  When another fusion node is launched for comparison, set enable_tf:=false there.
+-->
+<launch>
+  <arg name="fusion_method" default="factor_graph_fusion"
+       description="ekf | lio_sam_imu_preintegration | factor_graph_fusion"/>
+  <arg name="param_file" default="$(find-pkg-share autoware_pose_twist_fusion)/config/pose_twist_fusion.param.yaml"/>
+  <arg name="enable_tf" default="true"/>
+
+  <!-- inputs -->
+  <arg name="input_initial_pose_name" default="/initialpose3d"/>
+  <arg name="input_imu_name" default="/sensing/imu/imu_data"/>
+  <arg name="input_pose_with_cov_name" default="/localization/pose_estimator/pose_with_covariance"/>
+  <arg name="input_twist_with_cov_name" default="/localization/twist_estimator/twist_with_covariance"/>
+  <arg name="input_vehicle_twist_with_cov_name" default="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
+  <arg name="input_gnss_pose_with_cov_name" default="/sensing/gnss/pose_with_covariance"/>
+  <arg name="input_lidar_odometry_name" default="lio_sam/mapping/odometry"/>
+
+  <!-- outputs (design §3.1) -->
+  <arg name="output_odom_name" default="kinematic_state"/>
+  <arg name="output_pose_with_covariance_name" default="/localization/pose_with_covariance"/>
+  <arg name="output_ns_pose_with_covariance_name" default="pose_with_covariance"/>
+  <arg name="output_pose_with_covariance_no_yawbias_name" default="pose_with_covariance_no_yawbias"/>
+  <arg name="output_biased_pose_with_covariance_name" default="biased_pose_with_covariance"/>
+  <arg name="output_twist_with_covariance_name" default="twist_with_covariance"/>
+  <arg name="output_pose_name" default="pose"/>
+  <arg name="output_biased_pose_name" default="biased_pose"/>
+  <arg name="output_twist_name" default="twist"/>
+
+  <node pkg="autoware_pose_twist_fusion" exec="autoware_pose_twist_fusion_node"
+        name="pose_twist_fusion" output="both">
+    <param from="$(var param_file)"/>
+    <param name="fusion_method" value="$(var fusion_method)"/>
+    <param name="enable_tf" value="$(var enable_tf)"/>
+    <param name="imu_topic" value="$(var input_imu_name)"/>
+    <param name="initialpose_topic" value="$(var input_initial_pose_name)"/>
+    <param name="ekf.input_pose_topic" value="$(var input_pose_with_cov_name)"/>
+    <param name="ekf.input_twist_topic" value="$(var input_twist_with_cov_name)"/>
+    <param name="factor_graph_fusion.ndt.topic" value="$(var input_pose_with_cov_name)"/>
+    <param name="factor_graph_fusion.wheel_speed.topic" value="$(var input_vehicle_twist_with_cov_name)"/>
+    <param name="factor_graph_fusion.gnss.topic" value="$(var input_gnss_pose_with_cov_name)"/>
+    <param name="factor_graph_fusion.slam.topic" value="$(var input_lidar_odometry_name)"/>
+    <param name="lio_sam.imu_topic" value="$(var input_imu_name)"/>
+    <param name="lio_sam.lidar_odometry_topic" value="$(var input_lidar_odometry_name)"/>
+
+    <remap from="kinematic_state" to="$(var output_odom_name)"/>
+    <remap from="pose_with_covariance" to="$(var output_pose_with_covariance_name)"/>
+    <remap from="ns_pose_with_covariance" to="$(var output_ns_pose_with_covariance_name)"/>
+    <remap from="pose_with_covariance_no_yawbias" to="$(var output_pose_with_covariance_no_yawbias_name)"/>
+    <remap from="biased_pose_with_covariance" to="$(var output_biased_pose_with_covariance_name)"/>
+    <remap from="twist_with_covariance" to="$(var output_twist_with_covariance_name)"/>
+    <remap from="pose" to="$(var output_pose_name)"/>
+    <remap from="biased_pose" to="$(var output_biased_pose_name)"/>
+    <remap from="twist" to="$(var output_twist_name)"/>
+  </node>
+</launch>
