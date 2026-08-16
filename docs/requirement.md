@@ -1,0 +1,12 @@
+- 本パッケージは自己位置推定機能を有する。
+- Autowareの機能として動かすことを想定しており、本パッケージekf_localizerの代わりに実行するものである。（つまり、出力topicとして、ekf_localizerが出しているtopic（/localization/pose_twist_fusion_filter/kinematic_state, /localization/pose_twist_fusion_filter/pose_with_covariance, /localization/pose_twist_fusion_filter/pose_with_covariance_no_yawbias）が出てくる）
+- 以下の3種類の機能を起動時（launchなど）のパラメータで切り替えて実行できる。既存のパッケージの機能のアルゴリズムは元のアルゴリズムに準ずること。ただし、入出力は前述の出力topicに関する要求に応じて正しく設定すること。
+	- Autowareのekf_localizer
+	- LIO-SAMのimuPreintegration
+	- 以下の要件を満たすセンサ融合機能（自作）
+		- gtsamを使用したセンサ融合機能。
+		- 入力として、GPS自己位置（/sensing/gnss/pose_with_covariance）、内界センサ情報（IMU:/sensing/imu/imu_data、車速:/sensing/vehicle_celocity_converter/twist_with_covariance）、NDT自己位置（/localization/pose_estimator/pose_with_covariance）を受け取る。
+		- 因子グラフは以下の2種類とし、使用する情報をSubscribeしたら対応する因子グラフに因子を追加し、指定の更新周期で最適化をかける。
+			- 因子グラフ1：内界センサ情報のみを用いて更新される（更新周期:20ms）。因子グラフ2の更新タイミングでリセットをかける。
+			- 因子グラフ2：すべての入力を使用して更新される（更新周期:500ms）。因子グラフ2の更新タイミングでリセットをかける。
+		- 入力をSubscribeした時刻の因子グラフ1の自己位置＋共分散の範囲を考慮して、因子グラフを追加する際の共分散の値に補正をかける。やりたいこととしては、内界センサで移動可能な範囲が因子グラフ1の結果からわかるはずなので、その範囲と入力値の値から確率的な信頼度を決めたい（ロジック案として良いものがあれば提案すること）
